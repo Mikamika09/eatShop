@@ -11,10 +11,16 @@ client = genai.Client(api_key=GOOGLE_API_KEY)
 st.set_page_config(page_title="スマートご飯決めAI", page_icon="🍽️", layout="centered")
 st.title("🍽️ キラみか専用！スマートご飯決めAI 🤤")
 
+# 💡 超重要追加：結果を忘れないための「専用ポケット（記憶）」を作る！
+if "tab1_result" not in st.session_state:
+    st.session_state.tab1_result = None
+if "tab2_result" not in st.session_state:
+    st.session_state.tab2_result = None
+
 tab1, tab2 = st.tabs(["🍽️ お店探し＆提案", "🚃 お店の情報＆総予算シミュレーション"])
 
 # ==========================================
-# タブ1：お店探し＆提案（📸 写真付きバージョン！）
+# タブ1：お店探し＆提案
 # ==========================================
 with tab1:
     st.header("気分とワガママからお店を探すよ！")
@@ -64,12 +70,9 @@ with tab1:
                 else:
                     shop_list_text = ""
                     for i, shop in enumerate(shops):
-                        # 💡 追加：APIのデータから「メイン写真のURL」を抜き出す！
                         photo_url = shop.get('photo', {}).get('pc', {}).get('l', '')
-                        
                         shop_list_text += f"店名:{shop.get('name')}, ジャンル:{shop.get('genre',{}).get('name')}, 予算:{shop.get('budget',{}).get('name')}, URL:{shop.get('urls',{}).get('pc')}, 写真URL:{photo_url}\n"
                     
-                    # 💡 変更：Geminiに「提案の中に画像も貼ってね！」とお願いする
                     user_message = f"""
                     あなたはセンス抜群のグルメアドバイザーです。
                     「{search_keyword}」周辺で「{target_mood}」な気分のユーザーに、以下の【実在するお店リスト】から最大3つお店を選んで提案して！
@@ -81,13 +84,20 @@ with tab1:
                     【お店リスト】\n{shop_list_text}
                     """
                     response = client.models.generate_content(model='gemini-2.5-flash', contents=user_message)
-                    st.success("最高の候補が見つかったよ！写真も見てみてね！📸✨")
-                    st.markdown(response.text)
+                    
+                    # 💡 変更：結果をすぐ画面に出すんじゃなくて、一旦ポケット（session_state）にしまう！
+                    st.session_state.tab1_result = response.text
+                    
             except Exception as e:
                 st.error(f"エラーが発生したよ：{e}")
 
+    # 💡 変更：ポケットの中に結果が入ってたら、いつでも画面に出す！
+    if st.session_state.tab1_result:
+        st.success("最高の候補が見つかったよ！写真も見てみてね！📸✨")
+        st.markdown(st.session_state.tab1_result)
+
 # ==========================================
-# タブ2：お店の情報＆総予算シミュレーション（チェーン店対応版！）
+# タブ2：お店の情報＆総予算シミュレーション
 # ==========================================
 with tab2:
     st.header("お出かけ前の総予算シミュレーション👛")
@@ -177,6 +187,13 @@ with tab2:
                         model='gemini-2.5-flash',
                         contents=route_message
                     )
-                    st.markdown(route_response.text)
+                    
+                    # 💡 変更：Tab2の結果もポケットにしまう！
+                    st.session_state.tab2_result = route_response.text
+                    
             except Exception as e:
                 st.error(f"エラーが発生したよ：{e}")
+
+    # 💡 変更：ポケットの中に結果が入ってたら表示！
+    if st.session_state.tab2_result:
+        st.markdown(st.session_state.tab2_result)
