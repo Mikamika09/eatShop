@@ -105,35 +105,31 @@ with tab2:
         if not start_point or not restaurant_name:
             st.error("出発地とお店の名前は絶対教えてね！")
         else:
-            # 💡 検索キーワードを賢く作るロジック！
             search_keywords = [restaurant_name]
             if branch_name:
                 search_keywords.append(branch_name)
             if dest_station:
                 search_keywords.append(dest_station)
             
-            # 店舗名も目的地の駅も入力されていない（＝チェーン店などで一番近いところに行きたい）場合
             if not branch_name and not dest_station:
-                # とりあえず「出発地の近く」にあるか探すためのキーワード構成にする裏技！
                 search_query = f"{restaurant_name} {start_point}"
-                fallback_query = restaurant_name # もし出発地近くになかった時用
+                fallback_query = restaurant_name 
             else:
                 search_query = " ".join(search_keywords)
                 fallback_query = search_query
             
-            st.write(f"「{search_query}」の正確なデータと予算をAPIで検索中...🔍🏃‍♀️💨")
+            st.write(f"「{search_query}」の店舗データをAPIで検索中...🔍🏃‍♀️💨")
             
             hotpepper_url = "https://webservice.recruit.co.jp/hotpepper/gourmet/v1/"
             
             try:
-                # 1回目の検索（出発地周辺 or 指定された条件）
-                params = {"key": HOTPEPPER_API_KEY, "keyword": search_query, "format": "json", "count": 1}
+                # 💡 変更：countを1から「10」に増やして、候補をたくさん引っ張ってくる！
+                params = {"key": HOTPEPPER_API_KEY, "keyword": search_query, "format": "json", "count": 10}
                 res = requests.get(hotpepper_url, params=params)
                 shops = res.json().get("results", {}).get("shop", [])
                 
-                # 💡 もし「出発地周辺」で探して見つからなかったら、指定なしで全国から一番上を探す（フォールバック）
                 if not shops and not branch_name and not dest_station:
-                    st.write("出発地の近くにはなさそう！エリアを広げて探してみるね！💦")
+                    st.write("出発地の近くにはなさそう！エリアを広げて最大10店舗探してみるね！💦")
                     params["keyword"] = fallback_query
                     res = requests.get(hotpepper_url, params=params)
                     shops = res.json().get("results", {}).get("shop", [])
@@ -141,36 +137,40 @@ with tab2:
                 if not shops:
                     st.warning("ごめん！APIでお店が特定できなかった😭 名前の書き方を少し変えてみて！")
                 else:
-                    # 見つかったお店の「本物のデータ」を抜き出す！
-                    target_shop = shops[0]
-                    shop_name = target_shop.get("name")
-                    shop_address = target_shop.get("address", "住所不明") # 💡 住所を追加！
-                    shop_budget = target_shop.get("budget", {}).get("name", "予算情報なし（大体3000円くらいかな🤔）")
-                    shop_genre = target_shop.get("genre", {}).get("name", "美味しいご飯")
-                    shop_catch = target_shop.get("catch", "")
+                    st.success(f"お店の候補を {len(shops)}件 見つけたよ！ここからAIが一番近い店舗を選ぶね！🎯")
                     
-                    st.success(f"お店を特定したよ！🎯【{shop_name}】(予算目安: {shop_budget})")
-                    st.write("このリアルな予算と住所を使って、交通費とアドバイスをAIがまとめるね！🤔💭")
+                    # 💡 追加：見つかった最大10件の店舗情報を全部テキストにまとめる！
+                    shop_list_text = ""
+                    for i, shop in enumerate(shops):
+                        s_name = shop.get("name")
+                        s_address = shop.get("address", "住所不明")
+                        s_budget = shop.get("budget", {}).get("name", "予算情報なし")
+                        s_genre = shop.get("genre", {}).get("name", "美味しいご飯")
+                        s_catch = shop.get("catch", "")
+                        shop_list_text += f"【候補{i+1}】店名:{s_name}\n住所:{s_address}\n予算目安:{s_budget}\nジャンル:{s_genre}\nキャッチコピー:{s_catch}\n\n"
                     
-                    # 💡 変更：住所(shop_address)をAIに教えることで、正確な目的地駅を推測させる！
+                    # 💡 変更：Geminiに「一番近い店舗を選んで」と指示を出す！
                     route_message = f"""
                     あなたは優秀な交通案内AI兼、テンション高めのギャルプランナーです。
-                    ユーザーは「{start_point}」から以下の実在するお店に向かいます。
+                    ユーザーは「{start_point}」から「{restaurant_name}」に向かいたいと考えています。
                     
-                    【特定したお店のリアルデータ】
-                    ・店名: {shop_name}
-                    ・住所: {shop_address}
-                    ・ジャンル: {shop_genre}
-                    ・キャッチコピー: {shop_catch}
-                    ・予算目安: {shop_budget}
+                    【見つかった店舗の候補リスト】
+                    {shop_list_text}
                     
-                    以下の内容をマークダウンで出力して！
+                    【あなたのミッション】
+                    1. 上記の候補リストの中で、「{start_point}」から電車で一番近くてアクセスしやすい店舗を**1つだけ**選んでください。
+                       （例：ユーザーが長瀬駅や近大周辺にいる場合、梅田よりも難波や天王寺の店舗の方が圧倒的に近くて便利です！）
+                    2. 選んだ店舗について、以下の内容をマークダウンで出力してください。
+                    
+                    【出力してほしい構成】
+                    ### 🎯 選ばれたのは「（選んだ店名）」！
+                    （なぜこの店舗が一番近い/アクセスが良いと判断したか、理由をギャルっぽく教えて！）
+                    
                     1. 🚃 おおよそのルートと往復の交通費
-                       - 住所（{shop_address}）から最寄り駅を推測して、{start_point}からの往復交通費を計算して！
-                    2. 💰 必要な総予算の計算（推測した往復交通費 ＋ お店の予算目安 ＝ 必要な総額）
-                    3. 💡 「{shop_name}」に行く前のワンポイントアドバイス
-                       - ギャルっぽく明るいテンションで！
-                       - お店のジャンル（{shop_genre}）やキャッチコピー（{shop_catch}）の事実に基づいたリアルなアドバイスにして！知ったかぶりはNG！
+                       - 選んだ店舗の住所から最寄り駅を推測して、{start_point}からの往復交通費を計算して！
+                    2. 💰 必要な総予算の計算（推測した往復交通費 ＋ 選んだお店の予算目安 ＝ 必要な総額）
+                    3. 💡 ワンポイントアドバイス
+                       - ギャルっぽく明るいテンションで！選んだお店のジャンルやキャッチコピーの事実に基づいたアドバイスにして！
                     """
                     
                     route_response = client.models.generate_content(
