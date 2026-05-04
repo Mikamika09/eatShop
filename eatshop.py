@@ -11,23 +11,19 @@ client = genai.Client(api_key=GOOGLE_API_KEY)
 st.set_page_config(page_title="スマートご飯決めAI", page_icon="🍽️", layout="centered")
 st.title("🍽️ キラみか専用！スマートご飯決めAI 🤤")
 
-# 💡 追加：編み物アプリの技術を応用！タブで機能を分ける
-tab1, tab2 = st.tabs(["🍽️ サクッとお店探し", "🚃 交通費＆ガチ予算計算"])
+tab1, tab2 = st.tabs(["🍽️ お店探し＆提案", "🚃 交通費＆総予算シミュレーション"])
 
 # ==========================================
-# タブ1：サクッとお店探し（めんどくさがり屋用！）
+# タブ1：お店探し＆提案（ワガママ全開OK！）
 # ==========================================
 with tab1:
-    st.header("今の気分に合うお店を探すよ！")
+    st.header("気分とワガママからお店を探すよ！")
     
     st.subheader("📍 どこで食べる？")
     col1, col2 = st.columns([1, 2])
-    
     with col1:
         prefectures = ["大阪府", "京都府", "兵庫県", "奈良県", "東京都", "その他（自分で入力）"]
         selected_pref = st.selectbox("都道府県", prefectures)
-        
-        # 💡 修正：「その他」を選んだら、入力欄を新しく出現させる！
         if selected_pref == "その他（自分で入力）":
             final_pref = st.text_input("都道府県を教えて！", placeholder="例：北海道、福岡県")
         else:
@@ -36,8 +32,6 @@ with tab1:
     with col2:
         target_location = st.text_input("駅名や地名", placeholder="例：長瀬、梅田 など")
 
-    # ⚠️ 検索ボタンを押した後のキーワード合体部分も、final_pref に変更するのを忘れずに！
-    # search_keyword = f"{final_pref} {target_location}"
     st.subheader("💭 今の気分は？")
     mood_presets = ["🍖 ガッツリお肉！", "🍣 さっぱり和食", "🍝 おしゃれカフェ", "🌶️ 刺激的な辛さ", "その他"]
     selected_mood = st.selectbox("どんな気分？", mood_presets)
@@ -46,12 +40,18 @@ with tab1:
     else:
         target_mood = selected_mood
 
-    if st.button("サクッと探す！✨"):
-        if not target_location or not target_mood:
-            st.error("場所と気分を入力してね！")
+    # 💡 復活！具体的なワガママ枠
+    details_memo = st.text_area(
+        "さらに具体的なワガママ（任意）", 
+        placeholder="例：予算は1000円以内、友達とゆっくり話せる場所、デザートも食べたい！など"
+    )
+
+    if st.button("AIにガチのお店を選んでもらう！✨"):
+        if not target_location or not target_mood or (selected_pref == "その他（自分で入力）" and not final_pref):
+            st.error("場所と気分はしっかり入力してね！")
         else:
-            search_keyword = f"{selected_pref} {target_location}"
-            st.write(f"「{search_keyword}」周辺をリサーチ中...🔍")
+            search_keyword = f"{final_pref} {target_location}"
+            st.write(f"「{search_keyword}」周辺をリサーチ中...🔍🏃‍♀️💨")
             
             hotpepper_url = "https://webservice.recruit.co.jp/hotpepper/gourmet/v1/"
             params = {"key": HOTPEPPER_API_KEY, "keyword": search_keyword, "format": "json", "count": 15}
@@ -68,42 +68,48 @@ with tab1:
                         shop_list_text += f"店名:{shop.get('name')}, ジャンル:{shop.get('genre',{}).get('name')}, 予算:{shop.get('budget',{}).get('name')}, URL:{shop.get('urls',{}).get('pc')}\n"
                     
                     user_message = f"""
-                    あなたはグルメアドバイザーです。「{search_keyword}」で「{target_mood}」な気分のユーザーに、以下のリストから最大3つお店を選んで、ギャルっぽく明るく提案して！
+                    あなたはセンス抜群のグルメアドバイザーです。
+                    「{search_keyword}」周辺で「{target_mood}」な気分のユーザーに、以下の【実在するお店リスト】から最大3つお店を選んで提案して！
+                    追加のワガママ：「{details_memo if details_memo else '特になし'}」
+                    
+                    出力はマークダウン形式で、ギャルっぽく明るいテンションでお願いします！選んだ理由やURLも添えてね！
+                    
                     【お店リスト】\n{shop_list_text}
                     """
                     response = client.models.generate_content(model='gemini-2.5-flash', contents=user_message)
-                    st.success("見つかったよ！")
+                    st.success("最高の候補が見つかったよ！✨")
                     st.markdown(response.text)
             except Exception as e:
                 st.error(f"エラー：{e}")
 
 # ==========================================
-# タブ2：交通費＆ガチ予算計算（行きたい店が決まってる時用！）
+# タブ2：交通費＆総予算計算（結局いくら必要！？）
 # ==========================================
 with tab2:
-    st.header("お財布と相談！交通費シミュレーション")
-    st.write("「ここに行きたい！」が決まったら、交通費を計算して手持ちのお金で足りるかチェックしよう！👛")
+    st.header("お出かけ前の総予算シミュレーション👛")
+    st.write("行く場所が決まったら、交通費とご飯代を合わせて『結局いくら用意すればいいか』を計算しよう！")
     
-    start_point = st.text_input("📍 今どこにいる？（出発駅）", placeholder="例：長瀬駅、近大前 など")
-    end_point = st.text_input("🏁 行きたいお店の最寄駅（目的地）", placeholder="例：梅田駅、なんば駅 など")
-    wallet_money = st.number_input("💰 今お財布にいくらある？（総予算）", min_value=500, value=3000, step=500)
+    start_point = st.text_input("📍 出発地（今いる場所）", placeholder="例：長瀬駅、近大前 など")
+    end_point = st.text_input("🏁 目的地（お店の最寄駅）", placeholder="例：梅田駅、なんば駅 など")
+    # 💡 所持金ではなく、お店で使う予定の予算を入力させる！
+    food_budget = st.number_input("🍽️ ご飯の予算目安（円）", min_value=500, value=3000, step=500)
     
-    if st.button("交通費と残金を計算する！🚃"):
+    if st.button("総予算を計算する！🚃"):
         if not start_point or not end_point:
             st.error("出発地と目的地を入力してね！")
         else:
             st.write("経路と運賃をAIが推測中...🤔💭")
             
-            # 💡 ここはホットペッパーを使わず、Geminiの知識だけで計算！
+            # 💡 計算式を「引き算」から「足し算」に変更！
             route_message = f"""
-            あなたは優秀な交通案内AI兼、家計簿アドバイザーです。
-            ユーザーは「{start_point}」から「{end_point}」へ向かおうとしています。
-            現在の所持金（総予算）は「{wallet_money}円」です。
+            あなたは優秀な交通案内AI兼、プランナーです。
+            ユーザーは「{start_point}」から「{end_point}」へ向かいます。
+            現地でのご飯の予算は「{food_budget}円」を想定しています。
             
             以下の内容をマークダウンで出力してください。
             1. 🚃 おおよそのルートと往復の交通費（推測でOKです）
-            2. 👛 所持金から往復交通費を引いた「実際にお店で使える残金」の計算式と結果
-            3. 💡 その残金で楽しむための、少しギャルっぽいポジティブなアドバイス（例：「残金〇〇円なら、デザートまでいけちゃうね！」など）
+            2. 💰 必要な総予算の計算（推測した往復交通費 ＋ ご飯予算 {food_budget}円 ＝ 必要な総額）
+            3. 💡 お出かけ前のワンポイントアドバイス（ギャルっぽく明るいテンションで！）
             """
             
             try:
@@ -111,7 +117,7 @@ with tab2:
                     model='gemini-2.5-flash',
                     contents=route_message
                 )
-                st.success("計算完了！")
+                st.success("計算完了！これだけ用意すれば安心だよ！✨")
                 st.markdown(route_response.text)
             except Exception as e:
                 st.error(f"エラー：{e}")
