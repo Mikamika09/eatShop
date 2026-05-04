@@ -85,9 +85,14 @@ with tab1:
                     """
                     response = client.models.generate_content(model='gemini-2.5-flash', contents=user_message)
                     st.session_state.tab1_result = response.text
+            # ... (ここより上の try の部分はそのまま！) ...
             except Exception as e:
-                st.error(f"エラーが発生したよ：{e}")
-
+                # 💡 追加：エラーの内容をチェックして、優しいメッセージに変換！
+                if "503" in str(e):
+                    st.warning("今、AIのサーバーがめちゃくちゃ混み合ってるみたい💦 ごめんね🙇‍♀️ 少し時間空けてからもう一回ボタン押してみて！🙏✨")
+                else:
+                    # 503以外の予期せぬエラーの時はこっち
+                    st.error(f"あれ？なんかエラーが発生しちゃったみたい💦 運営（キラみか）に報告してね！：{e}")
     if st.session_state.tab1_result:
         st.success("最高の候補が見つかったよ！写真も見てみてね！📸✨")
         st.markdown(st.session_state.tab1_result)
@@ -150,8 +155,14 @@ with tab2:
                     """
                     response = client.models.generate_content(model='gemini-2.5-flash', contents=route_message)
                     st.session_state.tab2_result = response.text
+            # ... (ここより上の try の部分はそのまま！) ...
             except Exception as e:
-                st.error(f"エラー：{e}")
+                # 💡 追加：エラーの内容をチェックして、優しいメッセージに変換！
+                if "503" in str(e):
+                    st.warning("今、AIのサーバーがめちゃくちゃ混み合ってるみたい💦 ごめんね🙇‍♀️ 少し時間空けてからもう一回ボタン押してみて！🙏✨")
+                else:
+                    # 503以外の予期せぬエラーの時はこっち
+                    st.error(f"あれ？なんかエラーが発生しちゃったみたい💦 運営（キラみか）に報告してね！：{e}")
 
     if st.session_state.tab2_result:
         st.markdown(st.session_state.tab2_result)
@@ -208,9 +219,14 @@ with tab3:
                     contents=plan_message
                 )
                 st.session_state.tab3_result = plan_response.text
+            # ... (ここより上の try の部分はそのまま！) ...
             except Exception as e:
-                st.error(f"エラーが発生したよ：{e}")
-
+                # 💡 追加：エラーの内容をチェックして、優しいメッセージに変換！
+                if "503" in str(e):
+                    st.warning("今、AIのサーバーがめちゃくちゃ混み合ってるみたい💦 ごめんね🙇‍♀️ 少し時間空けてからもう一回ボタン押してみて！🙏✨")
+                else:
+                    # 503以外の予期せぬエラーの時はこっち
+                    st.error(f"あれ？なんかエラーが発生しちゃったみたい💦 運営（キラみか）に報告してね！：{e}")
     if st.session_state.tab3_result:
         st.success("神プラン完成！！これで当日は迷わず遊べるね！🎉✨")
         st.markdown(st.session_state.tab3_result)
