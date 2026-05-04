@@ -8,6 +8,26 @@ GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 HOTPEPPER_API_KEY = st.secrets["HOTPEPPER_API_KEY"]
 client = genai.Client(api_key=GOOGLE_API_KEY)
 
+# --- 🔓 簡易認証システム ---
+# セッション状態を使って、一度パスワードが通れば再入力しなくていいようにするよ！
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    st.subheader("🛡️ セキュリティ認証")
+    password = st.text_input("合言葉を入れてね", type="password")
+    if st.button("ログイン"):
+        if password == "n&bku1biu793i": # ← 好きな合言葉に変えてもOK！
+            st.session_state.authenticated = True
+            st.rerun() # 画面をリフレッシュして中身を表示
+        else:
+            st.error("合言葉が違うよ！🤫")
+    st.info("このアプリは関係者専用です。")
+    st.stop() # ここで処理を止めて、下のコード（中身）を見せない
+
+# --- 🏠 アプリの本編（認証が成功した時だけ実行される） ---
+st.success("認証成功！相棒AIを起動したよ🧸✨")
+
 # --- 画面の基本設定 ---
 st.set_page_config(page_title="ガチご飯決めAI", page_icon="🍽️", layout="centered")
 st.title("🍽️ キラみか専用！ガチご飯決めAI 🤤")
