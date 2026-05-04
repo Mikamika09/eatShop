@@ -86,62 +86,91 @@ with tab1:
 # ==========================================
 with tab2:
     st.header("お出かけ前の総予算シミュレーション👛")
-    st.write("行きたいお店の名前を入れるだけで、APIが予算を自動リサーチ！交通費込みの総額を出すよ✨")
+    st.write("行きたいお店の情報を入れて、APIで予算を自動リサーチ！交通費込みの総額を出すよ✨")
     
-    start_point = st.text_input("📍 出発地（今いる場所）", placeholder="例：長瀬駅、近大前 など")
+    start_point = st.text_input("📍 出発地（今いる場所や最寄駅）", placeholder="例：長瀬駅、近大前 など")
     
-    # 💡 変更：予算の入力欄を消して、お店の名前だけ聞くようにした！
-    restaurant_keyword = st.text_input("🍽️ 行きたいお店の名前（＋駅名）", placeholder="例：OKOGE 大阪駅、鳥貴族 長瀬 など")
+    st.write("---")
+    st.write("🍽️ **行きたいお店の情報**（お店の名前だけは必須！）")
+    restaurant_name = st.text_input("お店の名前（必須）", placeholder="例：HARBS、鳥貴族、OKOGE など")
+    
+    # 💡 改善：店舗名と最寄駅を横並びで別々に入力できるようにした！
+    col1, col2 = st.columns(2)
+    with col1:
+        branch_name = st.text_input("店舗名（任意）", placeholder="例：なんばパークス店")
+    with col2:
+        dest_station = st.text_input("目的地の駅（任意）", placeholder="例：難波駅")
     
     if st.button("お店を特定して総予算を計算する！🚃"):
-        if not start_point or not restaurant_keyword:
-            st.error("出発地とお店の名前を入力してね！")
+        if not start_point or not restaurant_name:
+            st.error("出発地とお店の名前は絶対教えてね！")
         else:
-            st.write(f"「{restaurant_keyword}」の正確なデータと予算をAPIで検索中...🔍🏃‍♀️💨")
+            # 💡 検索キーワードを賢く作るロジック！
+            search_keywords = [restaurant_name]
+            if branch_name:
+                search_keywords.append(branch_name)
+            if dest_station:
+                search_keywords.append(dest_station)
             
-            # 💡 追加：Tab2でもホットペッパーAPIを使って、入力されたお店をピンポイントで探す！
+            # 店舗名も目的地の駅も入力されていない（＝チェーン店などで一番近いところに行きたい）場合
+            if not branch_name and not dest_station:
+                # とりあえず「出発地の近く」にあるか探すためのキーワード構成にする裏技！
+                search_query = f"{restaurant_name} {start_point}"
+                fallback_query = restaurant_name # もし出発地近くになかった時用
+            else:
+                search_query = " ".join(search_keywords)
+                fallback_query = search_query
+            
+            st.write(f"「{search_query}」の正確なデータと予算をAPIで検索中...🔍🏃‍♀️💨")
+            
             hotpepper_url = "https://webservice.recruit.co.jp/hotpepper/gourmet/v1/"
-            params = {
-                "key": HOTPEPPER_API_KEY, 
-                "keyword": restaurant_keyword, 
-                "format": "json", 
-                "count": 1 # 1番上に出てきたお店だけ特定すればOK！
-            }
             
             try:
+                # 1回目の検索（出発地周辺 or 指定された条件）
+                params = {"key": HOTPEPPER_API_KEY, "keyword": search_query, "format": "json", "count": 1}
                 res = requests.get(hotpepper_url, params=params)
                 shops = res.json().get("results", {}).get("shop", [])
                 
+                # 💡 もし「出発地周辺」で探して見つからなかったら、指定なしで全国から一番上を探す（フォールバック）
+                if not shops and not branch_name and not dest_station:
+                    st.write("出発地の近くにはなさそう！エリアを広げて探してみるね！💦")
+                    params["keyword"] = fallback_query
+                    res = requests.get(hotpepper_url, params=params)
+                    shops = res.json().get("results", {}).get("shop", [])
+
                 if not shops:
-                    st.warning("ごめん！APIでお店が特定できなかった😭 お店の名前や駅名を少し変えてみて！")
+                    st.warning("ごめん！APIでお店が特定できなかった😭 名前の書き方を少し変えてみて！")
                 else:
                     # 見つかったお店の「本物のデータ」を抜き出す！
                     target_shop = shops[0]
                     shop_name = target_shop.get("name")
+                    shop_address = target_shop.get("address", "住所不明") # 💡 住所を追加！
                     shop_budget = target_shop.get("budget", {}).get("name", "予算情報なし（大体3000円くらいかな🤔）")
                     shop_genre = target_shop.get("genre", {}).get("name", "美味しいご飯")
                     shop_catch = target_shop.get("catch", "")
                     
                     st.success(f"お店を特定したよ！🎯【{shop_name}】(予算目安: {shop_budget})")
-                    st.write("このリアルな予算を使って、交通費とアドバイスをAIがまとめるね！🤔💭")
+                    st.write("このリアルな予算と住所を使って、交通費とアドバイスをAIがまとめるね！🤔💭")
                     
-                    # 💡 変更：推測じゃなく、APIで取った「本物のデータ」をAIに渡す！
+                    # 💡 変更：住所(shop_address)をAIに教えることで、正確な目的地駅を推測させる！
                     route_message = f"""
                     あなたは優秀な交通案内AI兼、テンション高めのギャルプランナーです。
                     ユーザーは「{start_point}」から以下の実在するお店に向かいます。
                     
                     【特定したお店のリアルデータ】
                     ・店名: {shop_name}
+                    ・住所: {shop_address}
                     ・ジャンル: {shop_genre}
                     ・キャッチコピー: {shop_catch}
                     ・予算目安: {shop_budget}
                     
                     以下の内容をマークダウンで出力して！
-                    1. 🚃 おおよそのルートと往復の交通費（推測でOK）
+                    1. 🚃 おおよそのルートと往復の交通費
+                       - 住所（{shop_address}）から最寄り駅を推測して、{start_point}からの往復交通費を計算して！
                     2. 💰 必要な総予算の計算（推測した往復交通費 ＋ お店の予算目安 ＝ 必要な総額）
                     3. 💡 「{shop_name}」に行く前のワンポイントアドバイス
                        - ギャルっぽく明るいテンションで！
-                       - お店のジャンル（{shop_genre}）やキャッチコピー（{shop_catch}）の事実に基づいた、リアルで役に立つアドバイスにして！知ったかぶりはNG！
+                       - お店のジャンル（{shop_genre}）やキャッチコピー（{shop_catch}）の事実に基づいたリアルなアドバイスにして！知ったかぶりはNG！
                     """
                     
                     route_response = client.models.generate_content(
