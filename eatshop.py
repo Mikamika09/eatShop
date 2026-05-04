@@ -14,7 +14,7 @@ st.title("🍽️ キラみか専用！スマートご飯決めAI 🤤")
 tab1, tab2 = st.tabs(["🍽️ お店探し＆提案", "🚃 お店の情報＆総予算シミュレーション"])
 
 # ==========================================
-# タブ1：お店探し＆提案（ワガママ全開OK！）
+# タブ1：お店探し＆提案（📸 写真付きバージョン！）
 # ==========================================
 with tab1:
     st.header("気分とワガママからお店を探すよ！")
@@ -64,25 +64,30 @@ with tab1:
                 else:
                     shop_list_text = ""
                     for i, shop in enumerate(shops):
-                        shop_list_text += f"店名:{shop.get('name')}, ジャンル:{shop.get('genre',{}).get('name')}, 予算:{shop.get('budget',{}).get('name')}, URL:{shop.get('urls',{}).get('pc')}\n"
+                        # 💡 追加：APIのデータから「メイン写真のURL」を抜き出す！
+                        photo_url = shop.get('photo', {}).get('pc', {}).get('l', '')
+                        
+                        shop_list_text += f"店名:{shop.get('name')}, ジャンル:{shop.get('genre',{}).get('name')}, 予算:{shop.get('budget',{}).get('name')}, URL:{shop.get('urls',{}).get('pc')}, 写真URL:{photo_url}\n"
                     
+                    # 💡 変更：Geminiに「提案の中に画像も貼ってね！」とお願いする
                     user_message = f"""
                     あなたはセンス抜群のグルメアドバイザーです。
                     「{search_keyword}」周辺で「{target_mood}」な気分のユーザーに、以下の【実在するお店リスト】から最大3つお店を選んで提案して！
                     追加のワガママ：「{details_memo if details_memo else '特になし'}」
                     
                     出力はマークダウン形式で、ギャルっぽく明るいテンションでお願いします！選んだ理由やURLも添えてね！
+                    ★超重要：各お店を紹介する際、必ずリストにある「写真URL」を使って、マークダウン形式で画像を表示させてください。（例： `![お店の写真](写真URL)` ）
                     
                     【お店リスト】\n{shop_list_text}
                     """
                     response = client.models.generate_content(model='gemini-2.5-flash', contents=user_message)
-                    st.success("最高の候補が見つかったよ！✨")
+                    st.success("最高の候補が見つかったよ！写真も見てみてね！📸✨")
                     st.markdown(response.text)
             except Exception as e:
-                st.error(f"エラー：{e}")
+                st.error(f"エラーが発生したよ：{e}")
 
 # ==========================================
-# タブ2：お店の情報＆総予算シミュレーション
+# タブ2：お店の情報＆総予算シミュレーション（チェーン店対応版！）
 # ==========================================
 with tab2:
     st.header("お出かけ前の総予算シミュレーション👛")
@@ -94,7 +99,6 @@ with tab2:
     st.write("🍽️ **行きたいお店の情報**（お店の名前だけは必須！）")
     restaurant_name = st.text_input("お店の名前（必須）", placeholder="例：HARBS、鳥貴族、OKOGE など")
     
-    # 💡 改善：店舗名と最寄駅を横並びで別々に入力できるようにした！
     col1, col2 = st.columns(2)
     with col1:
         branch_name = st.text_input("店舗名（任意）", placeholder="例：なんばパークス店")
@@ -123,7 +127,6 @@ with tab2:
             hotpepper_url = "https://webservice.recruit.co.jp/hotpepper/gourmet/v1/"
             
             try:
-                # 💡 変更：countを1から「10」に増やして、候補をたくさん引っ張ってくる！
                 params = {"key": HOTPEPPER_API_KEY, "keyword": search_query, "format": "json", "count": 10}
                 res = requests.get(hotpepper_url, params=params)
                 shops = res.json().get("results", {}).get("shop", [])
@@ -139,7 +142,6 @@ with tab2:
                 else:
                     st.success(f"お店の候補を {len(shops)}件 見つけたよ！ここからAIが一番近い店舗を選ぶね！🎯")
                     
-                    # 💡 追加：見つかった最大10件の店舗情報を全部テキストにまとめる！
                     shop_list_text = ""
                     for i, shop in enumerate(shops):
                         s_name = shop.get("name")
@@ -149,7 +151,6 @@ with tab2:
                         s_catch = shop.get("catch", "")
                         shop_list_text += f"【候補{i+1}】店名:{s_name}\n住所:{s_address}\n予算目安:{s_budget}\nジャンル:{s_genre}\nキャッチコピー:{s_catch}\n\n"
                     
-                    # 💡 変更：Geminiに「一番近い店舗を選んで」と指示を出す！
                     route_message = f"""
                     あなたは優秀な交通案内AI兼、テンション高めのギャルプランナーです。
                     ユーザーは「{start_point}」から「{restaurant_name}」に向かいたいと考えています。
@@ -159,7 +160,6 @@ with tab2:
                     
                     【あなたのミッション】
                     1. 上記の候補リストの中で、「{start_point}」から電車で一番近くてアクセスしやすい店舗を**1つだけ**選んでください。
-                       （例：ユーザーが長瀬駅や近大周辺にいる場合、梅田よりも難波や天王寺の店舗の方が圧倒的に近くて便利です！）
                     2. 選んだ店舗について、以下の内容をマークダウンで出力してください。
                     
                     【出力してほしい構成】
